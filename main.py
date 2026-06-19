@@ -137,17 +137,19 @@ def generate_height_map_from_svg(svg_text: str):
         np.linspace(0, 1, grid_h)
     )
 
-    # ★ cubic → linear に変更（暴走を防ぐ）
+    # ★ linear 補間（安定）
     grid_z = griddata(sample_points, sample_heights, (grid_x, grid_y), method="linear")
 
-    # NaN を埋める（外周など）
+    # ★ linear で埋まらなかった部分を nearest で補完（自然な外周になる）
+    grid_z2 = griddata(sample_points, sample_heights, (grid_x, grid_y), method="nearest")
     nan_mask = np.isnan(grid_z)
-    grid_z[nan_mask] = np.nanmean(grid_z)
+    grid_z[nan_mask] = grid_z2[nan_mask]
 
-    # int に丸める（0〜7）
-    grid_z = np.clip(np.rint(grid_z), 0, 7).astype(int)
+    # int に丸める（0〜3）
+    grid_z = np.clip(np.rint(grid_z), 0, 3).astype(int)
 
     return grid_z.tolist()
+
 
 
 # ---------------------------------------------------
