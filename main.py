@@ -53,21 +53,20 @@ def stroke_to_height(stroke_or_class: str) -> int:
     if key in CLASS_TO_STROKE:
         key = CLASS_TO_STROKE[key]
 
-    # stroke 色で高さを決定
+    # ★ 高さレンジを 0〜3 に圧縮
     if key == "#ff0000":   # 赤
-        return 7
+        return 3
     if key == "#ffa500":   # オレンジ
-        return 6
-    if key == "#ffff00":   # 黄
-        return 4
-    if key == "#00ff00":   # 緑
         return 2
-    if key == "#0000ff":   # 青
+    if key == "#ffff00":   # 黄
+        return 1
+    if key == "#00ff00":   # 緑
         return 0
-    if key == "#ff00ff":   # Edge（境界）
+    if key == "#ff00ff":   # Edge
         return 0
 
     return 0
+
 
 # ---------------------------------------------------
 # SVG → 36×36 高さマップ生成
