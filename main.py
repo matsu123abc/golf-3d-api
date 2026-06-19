@@ -72,6 +72,9 @@ def stroke_to_height(stroke_or_class: str) -> int:
 # ---------------------------------------------------
 # SVG → 36×36 高さマップ生成
 # ---------------------------------------------------
+import numpy as np
+from scipy.interpolate import griddata
+
 def generate_height_map_from_svg(svg_text: str):
     root = ET.fromstring(svg_text)
 
@@ -99,9 +102,10 @@ def generate_height_map_from_svg(svg_text: str):
     grid_w = 36
     grid_h = 36
 
-    height_map = [[0 for _ in range(grid_w)] for _ in range(grid_h)]
+    # 等高線上の点（高さ付き）を集める
+    sample_points = []
+    sample_heights = []
 
-    # 再度 path を走査して高さを入れる
     for path in root.findall(".//{http://www.w3.org/2000/svg}path"):
 
         stroke_or_class = path.attrib.get("stroke") or path.attrib.get("class")
@@ -119,14 +123,32 @@ def generate_height_map_from_svg(svg_text: str):
             y = float(y_str)
 
             # 正規化（min/max を使う）
-            gx = int((x - min_x) / (max_x - min_x) * (grid_w - 1))
-            gy = int((y - min_y) / (max_y - min_y) * (grid_h - 1))
+            gx = (x - min_x) / (max_x - min_x)
+            gy = (y - min_y) / (max_y - min_y)
 
-            if 0 <= gx < grid_w and 0 <= gy < grid_h:
-                height_map[gy][gx] = max(height_map[gy][gx], height)
+            sample_points.append([gx, gy])
+            sample_heights.append(height)
 
-    return height_map
+    sample_points = np.array(sample_points)
+    sample_heights = np.array(sample_heights)
 
+    # 補間用のグリッド
+    grid_x, grid_y = np.meshgrid(
+        np.linspace(0, 1, grid_w),
+        np.linspace(0, 1, grid_h)
+    )
+
+    # 2D 補間（cubic が最も自然）
+    grid_z = griddata(sample_points, sample_heights, (grid_x, grid_y), method="cubic")
+
+    # NaN を埋める（外周など）
+    nan_mask = np.isnan(grid_z)
+    grid_z[nan_mask] = np.nanmean(grid_z)
+
+    # int に丸める（0〜7）
+    grid_z = np.clip(np.rint(grid_z), 0, 7).astype(int)
+
+    return grid_z.tolist()
 
 # ---------------------------------------------------
 # API: SVG → JSON 生成

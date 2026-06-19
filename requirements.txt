@@ -5,6 +5,4 @@ lxml
 svgpathtools
 azure-storage-blob
 requests
-
-
-
+scipy
