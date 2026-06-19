@@ -138,8 +138,8 @@ def generate_height_map_from_svg(svg_text: str):
         np.linspace(0, 1, grid_h)
     )
 
-    # 2D 補間（cubic が最も自然）
-    grid_z = griddata(sample_points, sample_heights, (grid_x, grid_y), method="cubic")
+    # ★ cubic → linear に変更（暴走を防ぐ）
+    grid_z = griddata(sample_points, sample_heights, (grid_x, grid_y), method="linear")
 
     # NaN を埋める（外周など）
     nan_mask = np.isnan(grid_z)
@@ -149,6 +149,7 @@ def generate_height_map_from_svg(svg_text: str):
     grid_z = np.clip(np.rint(grid_z), 0, 7).astype(int)
 
     return grid_z.tolist()
+
 
 # ---------------------------------------------------
 # API: SVG → JSON 生成
