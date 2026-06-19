@@ -9,13 +9,27 @@ from azure.storage.blob import BlobServiceClient
 app = FastAPI()
 logger = logging.getLogger("green_app")
 
+# ---------------------------------------------------
+# Blob 接続
+# ---------------------------------------------------
 connection_string = os.getenv("BLOB_CONNECTION_STRING")
 container_name = os.getenv("GREEN_CONTAINER_NAME")   # green-svg
 blob_service = BlobServiceClient.from_connection_string(connection_string)
 container_client = blob_service.get_container_client(container_name)
 
 # ---------------------------------------------------
-# Blob から SVG テキストを読み込む（URL ではなく Blob 名）
+# class → stroke 色のマッピング
+# ---------------------------------------------------
+CLASS_TO_STROKE = {
+    "a": "#ff0000",     # 赤（最も高い）
+    "b": "#ffa500",     # オレンジ
+    "c": "#ffff00",     # 黄
+    "d": "#00ff00",     # 緑
+    "s0": "#ff00ff",    # Edge（境界）
+}
+
+# ---------------------------------------------------
+# Blob から SVG テキストを読み込む
 # ---------------------------------------------------
 def load_svg_from_blob(blob_name: str) -> str:
     try:
@@ -27,25 +41,30 @@ def load_svg_from_blob(blob_name: str) -> str:
         raise HTTPException(status_code=500, detail=f"{blob_name} の読み込みに失敗しました")
 
 # ---------------------------------------------------
-# SVG の path の stroke 色 → 高さ値
+# stroke / class → 高さ値
 # ---------------------------------------------------
-def stroke_to_height(stroke: str) -> int:
-    if stroke is None:
+def stroke_to_height(stroke_or_class: str) -> int:
+    if not stroke_or_class:
         return 0
 
-    stroke = stroke.lower()
+    key = stroke_or_class.lower()
 
-    if stroke == "#ff0000":   # 赤
+    # class → stroke 色に変換
+    if key in CLASS_TO_STROKE:
+        key = CLASS_TO_STROKE[key]
+
+    # stroke 色で高さを決定
+    if key == "#ff0000":   # 赤
         return 7
-    if stroke == "#ffa500":   # オレンジ
+    if key == "#ffa500":   # オレンジ
         return 6
-    if stroke == "#ffff00":   # 黄
+    if key == "#ffff00":   # 黄
         return 4
-    if stroke == "#00ff00":   # 緑
+    if key == "#00ff00":   # 緑
         return 2
-    if stroke == "#0000ff":   # 青
+    if key == "#0000ff":   # 青
         return 0
-    if stroke == "#ff00ff":   # Edge（境界）
+    if key == "#ff00ff":   # Edge（境界）
         return 0
 
     return 0
@@ -65,9 +84,10 @@ def generate_height_map_from_svg(svg_text: str):
 
     height_map = [[0 for _ in range(grid_w)] for _ in range(grid_h)]
 
+    # path を走査
     for path in root.findall(".//{http://www.w3.org/2000/svg}path"):
-        stroke = path.attrib.get("stroke") or path.attrib.get("class")
-        height = stroke_to_height(stroke)
+        stroke_or_class = path.attrib.get("stroke") or path.attrib.get("class")
+        height = stroke_to_height(stroke_or_class)
 
         d = path.attrib.get("d")
         if not d:
@@ -94,10 +114,11 @@ def generate_height_map_from_svg(svg_text: str):
 @app.get("/generate/green/svg/1")
 def generate_green_from_svg():
 
-    # Blob から直接読み込む
+    # Blob から SVG を読み込む
     contour_svg = load_svg_from_blob("contour.svg")
-    edge_svg = load_svg_from_blob("edge.svg")  # 今は未使用だが後で境界処理に使える
+    edge_svg = load_svg_from_blob("edge.svg")  # 今後の境界処理用（現状未使用）
 
+    # 高さマップ生成
     height_map = generate_height_map_from_svg(contour_svg)
 
     json_data = {
