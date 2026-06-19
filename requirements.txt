@@ -1,3 +1,10 @@
 fastapi
 uvicorn
+numpy
+lxml
+svgpathtools
+azure-storage-blob
+requests
+
+
 
