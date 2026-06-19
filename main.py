@@ -75,17 +75,35 @@ def stroke_to_height(stroke_or_class: str) -> int:
 def generate_height_map_from_svg(svg_text: str):
     root = ET.fromstring(svg_text)
 
-    # SVG の viewBox を取得
-    viewbox = root.attrib.get("viewBox", "0 0 2123 3857")
-    _, _, w, h = map(float, viewbox.split())
+    # すべての path の座標を一度集める（min/max を求めるため）
+    all_points = []
+
+    for path in root.findall(".//{http://www.w3.org/2000/svg}path"):
+        d = path.attrib.get("d")
+        if not d:
+            continue
+
+        import re
+        coords = re.findall(r"([0-9]+\.?[0-9]*)[, ]+([0-9]+\.?[0-9]*)", d)
+
+        for x_str, y_str in coords:
+            all_points.append((float(x_str), float(y_str)))
+
+    # min/max を計算
+    xs = [p[0] for p in all_points]
+    ys = [p[1] for p in all_points]
+
+    min_x, max_x = min(xs), max(xs)
+    min_y, max_y = min(ys), max(ys)
 
     grid_w = 36
     grid_h = 36
 
     height_map = [[0 for _ in range(grid_w)] for _ in range(grid_h)]
 
-    # path を走査
+    # 再度 path を走査して高さを入れる
     for path in root.findall(".//{http://www.w3.org/2000/svg}path"):
+
         stroke_or_class = path.attrib.get("stroke") or path.attrib.get("class")
         height = stroke_to_height(stroke_or_class)
 
@@ -100,13 +118,15 @@ def generate_height_map_from_svg(svg_text: str):
             x = float(x_str)
             y = float(y_str)
 
-            gx = int((x / w) * grid_w)
-            gy = int((y / h) * grid_h)
+            # 正規化（min/max を使う）
+            gx = int((x - min_x) / (max_x - min_x) * (grid_w - 1))
+            gy = int((y - min_y) / (max_y - min_y) * (grid_h - 1))
 
             if 0 <= gx < grid_w and 0 <= gy < grid_h:
                 height_map[gy][gx] = max(height_map[gy][gx], height)
 
     return height_map
+
 
 # ---------------------------------------------------
 # API: SVG → JSON 生成
