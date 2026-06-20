@@ -385,6 +385,9 @@ def green_3d(green_id: int):
 async function loadGreenData() {{
   const url = "https://pcbdiagnosisrga8a5.blob.core.windows.net/course-maps/green_{green_id}.json";
   const res = await fetch(url);
+  if (!res.ok) {{
+    throw new Error("failed to load json: " + res.status);
+  }}
   return await res.json();
 }}
 
@@ -397,11 +400,16 @@ async function main() {{
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x222222);
 
-  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+  const camera = new THREE.PerspectiveCamera(
+    45,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    1000
+  );
   camera.position.set(0, -60, 40);
   camera.lookAt(0, 0, 0);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({{ antialias: true }});
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
@@ -422,7 +430,7 @@ async function main() {{
   for (let i = 0; i < verts.count; i++) {{
     const x = i % W;
     const y = Math.floor(i / W);
-    const h = heights[y][x] * 0.5;
+    const h = heights[y][x] * 0.5;  // 高さスケール
     verts.setZ(i, h);
   }}
   verts.needsUpdate = true;
@@ -452,9 +460,12 @@ async function main() {{
   }});
 }}
 
-main();
+main().catch(e => {{
+  console.error(e);
+}});
 </script>
 
 </body>
 </html>
 """
+
