@@ -426,7 +426,10 @@ async function main() {{
   for (let i = 0; i < verts.count; i++) {{
     const x = i % W;
     const y = Math.floor(i / W);
-    const h = heights[y][x] * 0.3;
+
+    // ★ 地形の Y 軸反転（最重要）
+    const h = heights[H - 1 - y][x] * 0.3;
+
     verts.setZ(i, h);
   }}
   verts.needsUpdate = true;
@@ -444,9 +447,9 @@ async function main() {{
   // === Edge（外周線）を追加 ===
   if (data.edge) {{
     const edgePoints = data.edge.map(p => new THREE.Vector3(
-      (p[0] / 2123) * 36 - 18,                 // X はそのまま
-      36 - (p[1] / 3857) * 36 - 18,            // ★ Y 軸反転（最重要）
-      0.2                                      // 少し浮かせる
+      (p[0] / 2123) * 36 - 18,
+      36 - (p[1] / 3857) * 36 - 18,   // ★ EDGE の Y 軸反転
+      0.2
     ));
 
     const edgeGeometry = new THREE.BufferGeometry().setFromPoints(edgePoints);
@@ -456,9 +459,7 @@ async function main() {{
     }});
     const edgeLine = new THREE.Line(edgeGeometry, edgeMaterial);
 
-    // ★ 地形と同じ回転を適用
     edgeLine.rotation.x = -Math.PI / 2;
-
     scene.add(edgeLine);
   }}
 
