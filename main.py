@@ -14,10 +14,10 @@ app = FastAPI()
 logger = logging.getLogger("green_app")
 
 # ---------------------------------------------------
-# Blob 接続
+# Blob 接続（green-svg に固定）
 # ---------------------------------------------------
 connection_string = os.getenv("BLOB_CONNECTION_STRING")
-container_name = os.getenv("GREEN_CONTAINER_NAME")   # 例: green-svg / course-maps など
+container_name = "green-svg"   # コンテナを green-svg に統一
 blob_service = BlobServiceClient.from_connection_string(connection_string)
 container_client = blob_service.get_container_client(container_name)
 
@@ -53,11 +53,9 @@ def stroke_to_height(stroke_or_class: str) -> int:
 
     key = stroke_or_class.lower()
 
-    # class → stroke 色に変換
     if key in CLASS_TO_STROKE:
         key = CLASS_TO_STROKE[key]
 
-    # 高さレンジ（0〜3）
     if key == "#ff0000":   # 赤
         return 3
     if key == "#ffa500":   # オレンジ
@@ -77,7 +75,6 @@ def stroke_to_height(stroke_or_class: str) -> int:
 def generate_height_map_from_svg(svg_text: str):
     root = ET.fromstring(svg_text)
 
-    # すべての path の座標を一度集める（min/max を求めるため）
     all_points = []
 
     for path in root.findall(".//{http://www.w3.org/2000/svg}path"):
@@ -94,7 +91,6 @@ def generate_height_map_from_svg(svg_text: str):
     if not all_points:
         raise HTTPException(status_code=500, detail="SVG から座標が取得できませんでした")
 
-    # min/max を計算
     xs = [p[0] for p in all_points]
     ys = [p[1] for p in all_points]
 
@@ -104,7 +100,6 @@ def generate_height_map_from_svg(svg_text: str):
     grid_w = 36
     grid_h = 36
 
-    # 等高線上の点（高さ付き）を集める
     sample_points = []
     sample_heights = []
 
@@ -124,7 +119,6 @@ def generate_height_map_from_svg(svg_text: str):
             x = float(x_str)
             y = float(y_str)
 
-            # 正規化（min/max を使う）
             gx = (x - min_x) / (max_x - min_x)
             gy = (y - min_y) / (max_y - min_y)
 
@@ -134,21 +128,16 @@ def generate_height_map_from_svg(svg_text: str):
     sample_points = np.array(sample_points)
     sample_heights = np.array(sample_heights)
 
-    # 補間用のグリッド
     grid_x, grid_y = np.meshgrid(
         np.linspace(0, 1, grid_w),
         np.linspace(0, 1, grid_h)
     )
 
-    # linear 補間
     grid_z = griddata(sample_points, sample_heights, (grid_x, grid_y), method="linear")
-
-    # linear で埋まらなかった部分を nearest で補完
     grid_z2 = griddata(sample_points, sample_heights, (grid_x, grid_y), method="nearest")
     nan_mask = np.isnan(grid_z)
     grid_z[nan_mask] = grid_z2[nan_mask]
 
-    # int に丸める（0〜3）
     grid_z = np.clip(np.rint(grid_z), 0, 3).astype(int)
 
     return grid_z.tolist()
@@ -158,11 +147,9 @@ def generate_height_map_from_svg(svg_text: str):
 # ---------------------------------------------------
 @app.get("/generate/green/svg/1")
 def generate_green_from_svg():
-    # Blob から SVG を読み込む
     contour_svg = load_svg_from_blob("contour.svg")
     edge_svg = load_svg_from_blob("edge.svg")  # 今後の境界処理用（現状未使用）
 
-    # 高さマップ生成
     height_map = generate_height_map_from_svg(contour_svg)
 
     json_data = {
@@ -260,7 +247,7 @@ let selectedX = null;
 let selectedY = null;
 let currentHole = 1;
 
-let greenImageUrl = "https://pcbdiagnosisrga8a5.blob.core.windows.net/course-maps/green_1.png";
+let greenImageUrl = "https://pcbdiagnosisrga8a5.blob.core.windows.net/green-svg/green_1.png";
 
 const holeSelect = document.getElementById("holeSelect");
 const canvas = document.getElementById("canvas");
@@ -278,7 +265,7 @@ img.onload = () => {
 holeSelect.addEventListener("change", function() {
     currentHole = parseInt(this.value);
 
-    greenImageUrl = "https://pcbdiagnosisrga8a5.blob.core.windows.net/course-maps/green_" + currentHole + ".png";
+    greenImageUrl = "https://pcbdiagnosisrga8a5.blob.core.windows.net/green-svg/green_" + currentHole + ".png";
     img.src = greenImageUrl;
 
     iframe.src = "/green/" + currentHole + "/3d";
@@ -383,16 +370,22 @@ def green_3d(green_id: int):
 
 <script>
 async function loadGreenData() {{
-  const url = "https://pcbdiagnosisrga8a5.blob.core.windows.net/course-maps/green_{green_id}.json";
+  const url = "https://pcbdiagnosisrga8a5.blob.core.windows.net/green-svg/green_{green_id}.json";
   const res = await fetch(url);
   if (!res.ok) {{
-    throw new Error("failed to load json: " + res.status);
+    console.error("JSON load error:", res.status);
+    return null;
   }}
   return await res.json();
 }}
 
 async function main() {{
   const data = await loadGreenData();
+  if (!data) {{
+    document.body.innerHTML = "<p style='color:white'>JSON 読み込み失敗</p>";
+    return;
+  }}
+
   const heights = data.heights;
   const W = data.grid_width;
   const H = data.grid_height;
@@ -430,7 +423,7 @@ async function main() {{
   for (let i = 0; i < verts.count; i++) {{
     const x = i % W;
     const y = Math.floor(i / W);
-    const h = heights[y][x] * 0.5;  // 高さスケール
+    const h = heights[y][x] * 0.5;
     verts.setZ(i, h);
   }}
   verts.needsUpdate = true;
@@ -461,11 +454,10 @@ async function main() {{
 }}
 
 main().catch(e => {{
-  console.error(e);
+  console.error("3D error:", e);
 }});
 </script>
 
 </body>
 </html>
 """
-
