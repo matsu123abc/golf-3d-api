@@ -446,11 +446,14 @@ async function main() {{
     const edgePoints = data.edge.map(p => new THREE.Vector3(
       (p[0] / 2123) * 36 - 18,
       (p[1] / 3857) * 36 - 18,
-      0
+      0.2   // ← ★ Z を浮かせて地形の表側に出す
     ));
 
     const edgeGeometry = new THREE.BufferGeometry().setFromPoints(edgePoints);
-    const edgeMaterial = new THREE.LineBasicMaterial({{ color: 0xff00ff, linewidth: 2 }});
+    const edgeMaterial = new THREE.LineBasicMaterial({{
+      color: 0xff00ff,
+      linewidth: 4   // ← ★ 太くして視認性アップ
+    }});
     const edgeLine = new THREE.Line(edgeGeometry, edgeMaterial);
     scene.add(edgeLine);
   }}
