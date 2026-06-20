@@ -365,10 +365,10 @@ def green_3d(green_id: int):
 </head>
 <body>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+<script type="module">
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
+import {{ OrbitControls }} from "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js";
 
-<script>
 async function loadGreenData() {{
   const url = "https://pcbdiagnosisrga8a5.blob.core.windows.net/green-svg/green_1.json";
   const res = await fetch(url);
@@ -406,7 +406,7 @@ async function main() {{
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 0, 0);
   controls.update();
 
