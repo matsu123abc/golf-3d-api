@@ -365,34 +365,23 @@ def green_3d(green_id: int):
 </head>
 <body>
 
-<script type="module">
-import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js";
-import {{ OrbitControls }} from "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js";
+<!-- 実績コードと同じ：three.min.js のみ -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
+<script>
 async function loadGreenData() {{
   const url = "https://pcbdiagnosisrga8a5.blob.core.windows.net/green-svg/green_1.json";
   const res = await fetch(url);
-  if (!res.ok) {{
-    console.error("JSON load error:", res.status);
-    return null;
-  }}
   return await res.json();
 }}
 
 async function main() {{
   const data = await loadGreenData();
-  if (!data) {{
-    document.body.innerHTML = "<p style='color:white'>JSON 読み込み失敗</p>";
-    return;
-  }}
-
   const heights = data.heights;
   const W = data.grid_width;
   const H = data.grid_height;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x222222);
-
   const camera = new THREE.PerspectiveCamera(
     45,
     window.innerWidth / window.innerHeight,
@@ -406,12 +395,8 @@ async function main() {{
   renderer.setSize(window.innerWidth, window.innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 0, 0);
-  controls.update();
-
   const light = new THREE.DirectionalLight(0xffffff, 1);
-  light.position.set(50, -50, 80);
+  light.position.set(30, -30, 50);
   scene.add(light);
 
   const ambient = new THREE.AmbientLight(0x888888);
@@ -423,21 +408,18 @@ async function main() {{
   for (let i = 0; i < verts.count; i++) {{
     const x = i % W;
     const y = Math.floor(i / W);
-    const h = heights[y][x] * 0.5;
+    const h = heights[y][x] * 0.3;
     verts.setZ(i, h);
   }}
   verts.needsUpdate = true;
   geometry.computeVertexNormals();
 
-  const material = new THREE.MeshStandardMaterial({{
-    color: 0x228b22,
-    roughness: 0.9,
-    metalness: 0.0,
+  const material = new THREE.MeshLambertMaterial({{
+    color: 0x55aa55,
     side: THREE.DoubleSide
   }});
 
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.rotation.x = -Math.PI / 2;
   scene.add(mesh);
 
   function animate() {{
@@ -445,17 +427,9 @@ async function main() {{
     renderer.render(scene, camera);
   }}
   animate();
-
-  window.addEventListener("resize", () => {{
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  }});
 }}
 
-main().catch(e => {{
-  console.error("3D error:", e);
-}});
+main();
 </script>
 
 </body>
