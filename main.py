@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+import tempfile
 import xml.etree.ElementTree as ET
 
 from fastapi import FastAPI, HTTPException
@@ -9,15 +10,16 @@ from azure.storage.blob import BlobServiceClient
 
 import numpy as np
 from scipy.interpolate import griddata
+from svgpathtools import svg2paths
 
 app = FastAPI()
 logger = logging.getLogger("green_app")
 
 # ---------------------------------------------------
-# Blob 接続（green-svg に固定）
+# Blob 接続
 # ---------------------------------------------------
 connection_string = os.getenv("BLOB_CONNECTION_STRING")
-container_name = "green-svg"   # コンテナを green-svg に統一
+container_name = "green-svg"
 blob_service = BlobServiceClient.from_connection_string(connection_string)
 container_client = blob_service.get_container_client(container_name)
 
@@ -25,15 +27,15 @@ container_client = blob_service.get_container_client(container_name)
 # class → stroke 色のマッピング
 # ---------------------------------------------------
 CLASS_TO_STROKE = {
-    "a": "#ff0000",     # 赤（最も高い）
-    "b": "#ffa500",     # オレンジ
-    "c": "#ffff00",     # 黄
-    "d": "#00ff00",     # 緑
-    "s0": "#ff00ff",    # Edge（境界）
+    "a": "#ff0000",
+    "b": "#ffa500",
+    "c": "#ffff00",
+    "d": "#00ff00",
+    "s0": "#ff00ff",  # Edge
 }
 
 # ---------------------------------------------------
-# Blob から SVG テキストを読み込む
+# Blob から SVG を読み込む
 # ---------------------------------------------------
 def load_svg_from_blob(blob_name: str) -> str:
     try:
@@ -45,36 +47,53 @@ def load_svg_from_blob(blob_name: str) -> str:
         raise HTTPException(status_code=500, detail=f"{blob_name} の読み込みに失敗しました")
 
 # ---------------------------------------------------
-# stroke / class → 高さ値（0〜3）
+# stroke / class → 高さ値
 # ---------------------------------------------------
 def stroke_to_height(stroke_or_class: str) -> int:
     if not stroke_or_class:
         return 0
 
     key = stroke_or_class.lower()
-
     if key in CLASS_TO_STROKE:
         key = CLASS_TO_STROKE[key]
 
-    if key == "#ff0000":   # 赤
+    if key == "#ff0000":
         return 3
-    if key == "#ffa500":   # オレンジ
+    if key == "#ffa500":
         return 2
-    if key == "#ffff00":   # 黄
+    if key == "#ffff00":
         return 1
-    if key == "#00ff00":   # 緑
+    if key == "#00ff00":
         return 0
-    if key == "#ff00ff":   # Edge
+    if key == "#ff00ff":  # Edge
         return 0
 
     return 0
 
 # ---------------------------------------------------
-# SVG → 36×36 高さマップ生成（linear + nearest 補完）
+# SVG パス → 座標列（ピクセル座標のまま）
+# ---------------------------------------------------
+def extract_edge_points(svg_text: str, samples: int = 500):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".svg") as tmp:
+        tmp.write(svg_text.encode("utf-8"))
+        tmp_path = tmp.name
+
+    paths, attrs = svg2paths(tmp_path)
+    path = paths[0]  # Edge は 1 本想定
+
+    points = []
+    for i in range(samples):
+        t = i / (samples - 1)
+        p = path.point(t)
+        points.append([p.real, p.imag])
+
+    return points
+
+# ---------------------------------------------------
+# SVG → 36×36 高さマップ
 # ---------------------------------------------------
 def generate_height_map_from_svg(svg_text: str):
     root = ET.fromstring(svg_text)
-
     all_points = []
 
     for path in root.findall(".//{http://www.w3.org/2000/svg}path"):
@@ -84,7 +103,6 @@ def generate_height_map_from_svg(svg_text: str):
 
         import re
         coords = re.findall(r"([0-9]+\.?[0-9]*)[, ]+([0-9]+\.?[0-9]*)", d)
-
         for x_str, y_str in coords:
             all_points.append((float(x_str), float(y_str)))
 
@@ -104,7 +122,6 @@ def generate_height_map_from_svg(svg_text: str):
     sample_heights = []
 
     for path in root.findall(".//{http://www.w3.org/2000/svg}path"):
-
         stroke_or_class = path.attrib.get("stroke") or path.attrib.get("class")
         height = stroke_to_height(stroke_or_class)
 
@@ -148,9 +165,10 @@ def generate_height_map_from_svg(svg_text: str):
 @app.get("/generate/green/svg/1")
 def generate_green_from_svg():
     contour_svg = load_svg_from_blob("contour.svg")
-    edge_svg = load_svg_from_blob("edge.svg")  # 今後の境界処理用（現状未使用）
+    edge_svg = load_svg_from_blob("edge.svg")
 
     height_map = generate_height_map_from_svg(contour_svg)
+    edge_points = extract_edge_points(edge_svg)
 
     json_data = {
         "green_id": 1,
@@ -158,6 +176,7 @@ def generate_green_from_svg():
         "grid_height": 36,
         "cell_size_yards": 1.0,
         "heights": height_map,
+        "edge": edge_points,
         "pin_positions": {}
     }
 
@@ -365,12 +384,11 @@ def green_3d(green_id: int):
 </head>
 <body>
 
-<!-- 実績コードと同じ：three.min.js のみ -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
 <script>
 async function loadGreenData() {{
-  const url = "https://pcbdiagnosisrga8a5.blob.core.windows.net/green-svg/green_1.json";
+  const url = "https://pcbdiagnosisrga8a5.blob.core.windows.net/green-svg/green_{green_id}.json";
   const res = await fetch(url);
   return await res.json();
 }}
@@ -420,7 +438,22 @@ async function main() {{
   }});
 
   const mesh = new THREE.Mesh(geometry, material);
+  mesh.rotation.x = -Math.PI / 2;
   scene.add(mesh);
+
+  // === Edge（外周線）を追加 ===
+  if (data.edge) {{
+    const edgePoints = data.edge.map(p => new THREE.Vector3(
+      (p[0] / 2123) * 36 - 18,
+      (p[1] / 3857) * 36 - 18,
+      0
+    ));
+
+    const edgeGeometry = new THREE.BufferGeometry().setFromPoints(edgePoints);
+    const edgeMaterial = new THREE.LineBasicMaterial({{ color: 0xff00ff, linewidth: 2 }});
+    const edgeLine = new THREE.Line(edgeGeometry, edgeMaterial);
+    scene.add(edgeLine);
+  }}
 
   function animate() {{
     requestAnimationFrame(animate);
