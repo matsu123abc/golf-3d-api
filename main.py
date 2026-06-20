@@ -370,7 +370,7 @@ def green_3d(green_id: int):
 
 <script>
 async function loadGreenData() {{
-  const url = "https://pcbdiagnosisrga8a5.blob.core.windows.net/green-svg/green_{green_id}.json";
+  const url = "https://pcbdiagnosisrga8a5.blob.core.windows.net/green-svg/green_{{green_id}}.json";
   const res = await fetch(url);
   if (!res.ok) {{
     console.error("JSON load error:", res.status);
