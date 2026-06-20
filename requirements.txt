@@ -1,8 +1,7 @@
 fastapi
 uvicorn
 numpy
-lxml
-svgpathtools
+scipy
 azure-storage-blob
 requests
-scipy
+lxml
