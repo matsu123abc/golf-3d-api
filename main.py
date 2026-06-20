@@ -446,15 +446,19 @@ async function main() {{
     const edgePoints = data.edge.map(p => new THREE.Vector3(
       (p[0] / 2123) * 36 - 18,
       (p[1] / 3857) * 36 - 18,
-      0.2   // ← ★ Z を浮かせて地形の表側に出す
+      0.2   // ← 少し浮かせる
     ));
 
     const edgeGeometry = new THREE.BufferGeometry().setFromPoints(edgePoints);
     const edgeMaterial = new THREE.LineBasicMaterial({{
       color: 0xff00ff,
-      linewidth: 4   // ← ★ 太くして視認性アップ
+      linewidth: 4
     }});
     const edgeLine = new THREE.Line(edgeGeometry, edgeMaterial);
+
+    // ★ 地形と同じ回転を適用（これが最重要）
+    edgeLine.rotation.x = -Math.PI / 2;
+
     scene.add(edgeLine);
   }}
 
